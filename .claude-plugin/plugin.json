@@ -1,0 +1,17 @@
+{
+  "name": "sessions",
+  "version": "1.0.0",
+  "description": "A pane that lists every Claude Code session you started, grouped by folder, with names, pins, full-text and meaning search, and one-press resume in VS Code",
+  "author": { "name": "kasparovabi" },
+  "repository": "https://github.com/kasparovabi/claude-sessions",
+  "license": "MIT",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "vscodeCli": {
+      "type": "string",
+      "title": "VS Code CLI path",
+      "description": "Optional: the code command of the VS Code that should open sessions, for a second or renamed VS Code install. Empty: the system's vscode:// handler opens them.",
+      "default": ""
+    }
+  }
+}

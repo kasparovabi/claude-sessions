@@ -1,0 +1,32 @@
+{
+  "name": "oturumlar-ac",
+  "displayName": "Claude Sessions: resume in terminal",
+  "description": "Resumes the Claude Code session picked in the sessions mod in a VS Code terminal, and brings your open Claude tabs back when VS Code restarts",
+  "version": "1.0.0",
+  "publisher": "kasparov",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kasparovabi/claude-sessions"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "main": "./extension.js",
+  "activationEvents": [
+    "onUri",
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "Claude Sessions",
+      "properties": {
+        "claudeSessions.skipPermissions": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Resume sessions with `--dangerously-skip-permissions`. Claude then runs tools without asking you first."
+        }
+      }
+    }
+  }
+}

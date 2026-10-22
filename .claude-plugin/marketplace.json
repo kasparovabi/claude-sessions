@@ -1,0 +1,6 @@
+{
+  "name": "kasparovabi",
+  "description": "Claude Code mods by kasparovabi",
+  "owner": { "name": "kasparovabi" },
+  "plugins": [{ "name": "sessions", "source": "./" }]
+}
