@@ -38,7 +38,7 @@ const LIVE_FILES: Record<string, string> = {
   [`${LIVE_DIR}/300.json`]: JSON.stringify({ pid: 300, sessionId: 'new-id', cwd: '/p/yeni', name: 'yeni-2', nameSource: 'derived', status: 'idle', kind: 'interactive', entrypoint: 'cli', statusUpdatedAt: 980_000 }),
 }
 
-function stubHost(on: On, env: Record<string, string> = {}, language: string | null = 'Turkish') {
+function stubHost(on: On, env: Record<string, string> = {}, language: string | null = 'Turkish', selfId = 'self-id') {
   const written: Record<string, string> = {}
   const renames: string[] = []
   const titlePrompts: string[] = []
@@ -48,7 +48,7 @@ function stubHost(on: On, env: Record<string, string> = {}, language: string | n
   mock.env(on, { HOME, TMPDIR: '/tmp/x/', ...env })
   on('settings.read', () => ({ value: language ? { language } : {} }) as never)
   const clock = mock.clock(on, { now: 1_000_000 })
-  on('session.id', () => ({ value: 'self-id' }))
+  on('session.id', () => ({ value: selfId }))
   on('fs.list', () => ({
     value: ['100.json', '200.json', '300.json', '._100.json'].map(name => ({ name, kind: 'file' as const, size: 1, mtimeMs: 0, isLink: false })),
   }))
@@ -62,6 +62,7 @@ function stubHost(on: On, env: Record<string, string> = {}, language: string | n
   })
   on('process.run', (_$, e) => {
     if (e.argv[0] === 'ps' && env.OS === 'Windows_NT') return { deny: 'ENOENT' }
+    if (e.argv[0] === '/bin/sh') return { value: { exitCode: 0, stdout: '/u/claude --dangerously-skip-permissions\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     if (e.argv[0] === 'uname') return { value: { exitCode: 0, stdout: 'Darwin\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     if (e.argv[1] === '-e') return { value: { exitCode: 0, stdout: '100\n300\n', stderr: '', isStdoutTruncated: false, isStderrTruncated: false } }
     if (e.argv[1] === '--open-url' || e.argv[0] === 'rundll32' || e.argv[0] === 'open') opened.push([...e.argv])
@@ -296,4 +297,20 @@ test('Enter searches every message and by meaning, results stay in folders', asy
   await ui.input({ key: 'ara', text: 'yedekx', kind: 'change' })
   expect(await ui.find({ type: 'Text', text: /anlamca:/ })).toBeUndefined()
   await ui.unmount()
+})
+
+test('remembers the Terminal tab it runs in until the person leaves', async ($, on) => {
+  const id = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+  const host = stubHost(on, { TERM_PROGRAM: 'Apple_Terminal', TERM_SESSION_ID: 'TAB-1' }, 'Turkish', id)
+  on('session.start', (_$, e) => ({ cwd: e.cwd }))
+  on('session.end', (_$, e) => ({ sessionId: e.sessionId }))
+  on('command.register', (_$, e) => ({ value: { command: e.name } as never }))
+  const path = `${HOME}/.claude/oturumlar-sekmeler/TAB-1`
+
+  await $.session.start({ cwd: '/p/eski proje', surface: 'terminal', isInteractive: true })
+  expect(host.written[path]).toBe(`${id}\n1\n/p/eski proje\n`)
+  await $.session.end({ reason: 'other', sessionId: id } as never)
+  expect(host.written[path]).toBe(`${id}\n1\n/p/eski proje\n`)
+  await $.session.end({ reason: 'prompt_input_exit', sessionId: id } as never)
+  expect(host.written[path]).toBe('')
 })

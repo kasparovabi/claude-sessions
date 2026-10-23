@@ -2,7 +2,7 @@
 
 # Sessions
 
-A Claude Code mod that keeps a pane beside the chat with every session you started, grouped by the folder it ran in. You can name sessions, pin the ones you keep coming back to, search every message you and Claude wrote, and reopen a closed session in VS Code with one press. A small VS Code extension that comes with it also brings your open Claude terminal tabs back after VS Code restarts.
+A Claude Code mod that keeps a pane beside the chat with every session you started, grouped by the folder it ran in. You can name sessions, pin the ones you keep coming back to, search every message you and Claude wrote, and reopen a closed session in VS Code with one press. A small VS Code extension that comes with it brings your open Claude terminal tabs back after VS Code restarts, and a few lines in `~/.zshrc` do the same for macOS Terminal.
 
 [Türkçe açıklama aşağıda.](#türkçe)
 
@@ -29,7 +29,7 @@ found in the messages of 2 sessions · 1 related by meaning
 - **Pins.** Pinned sessions sit in their own block at the top.
 - **Search.** Typing filters titles and folders. Enter searches the text of every message, and at the same time asks Haiku for related words and searches for those, so "deploy" also finds the session where you only said "release".
 - **Resume in VS Code.** Pick a closed session and press "Open in VS Code": it opens in a new terminal tab in the session's folder.
-- **Tabs survive a restart.** The VS Code extension remembers which terminal tab runs which Claude session. When VS Code comes back, it resumes each one in its tab, under the session's name.
+- **Tabs survive a restart.** The VS Code extension remembers which terminal tab runs which Claude session. When VS Code comes back, it resumes each one in its tab, under the session's name. macOS Terminal tabs do the same with the snippet below.
 
 The first scan of 16,500 transcripts took about 25 seconds on my Mac; after that a refresh takes about 0.2 seconds, because only changed files are read again.
 
@@ -61,6 +61,29 @@ Then run **Developer: Reload Window** in every VS Code window that is already op
 
 Tab restore works best with `"terminal.integrated.defaultLocation": "editor"` and VS Code's persistent terminal sessions on (the default).
 
+### macOS Terminal tabs
+
+The mod writes the session each Terminal tab runs to `~/.claude/oturumlar-sekmeler/<tab id>` and empties it when you leave the session yourself (`/exit`, ctrl+c, ctrl+d). When Terminal brings a tab back, this snippet at the end of `~/.zshrc` resumes the session in it, in the same folder and with `--dangerously-skip-permissions` only if the session was started with it:
+
+```zsh
+if [[ $TERM_PROGRAM == Apple_Terminal && $TERM_SESSION_ID =~ '^[A-Za-z0-9:-]+$' && -r ~/.claude/oturumlar-sekmeler/$TERM_SESSION_ID ]]; then
+  () {
+    local -a r=("${(@f)$(<$1)}") t
+    rm -f -- $1
+    [[ $r[1] =~ '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' ]] || return
+    t=(~/.claude/projects/*/$r[1].jsonl(N))
+    (( $#t )) && ! pgrep -qf -- $r[1] && cd -- $r[3] 2>/dev/null || return
+    if [[ $r[2] == 1 ]]; then claude --dangerously-skip-permissions --resume $r[1]; else claude --resume $r[1]; fi
+  } ~/.claude/oturumlar-sekmeler/$TERM_SESSION_ID
+fi
+```
+
+Terminal brings tabs back after a restart when "Reopen windows when logging back in" is ticked. To get them back after quitting Terminal with ⌘Q too:
+
+```
+defaults write com.apple.Terminal NSQuitAlwaysKeepsWindows -bool true
+```
+
 ## Settings
 
 | Where | Setting | What it does |
@@ -87,6 +110,7 @@ Everything stays under `~/.claude`:
 | `oturum-adlari.json` | Names you gave in the pane |
 | `oturum-otomatik-adlari.json` | Titles Haiku wrote |
 | `oturum-sabitler.json` | Pinned session ids |
+| `oturumlar-sekmeler/<tab id>` | The session a macOS Terminal tab runs, for resuming it |
 
 Two things go to the model through your own Claude Code login: the first message of a session that has no name or title (to write a title, three sessions per pass), and the words you search for when you press Enter. No transcript is sent anywhere else.
 
@@ -111,6 +135,8 @@ Kurulum, Claude Code terminal oturumunda:
 ```
 
 VS Code eklentisi için [son sürümdeki](https://github.com/kasparovabi/claude-sessions/releases/latest) `.vsix` dosyasını indirip `code --install-extension claude-sessions-vscode-1.0.0.vsix` çalıştır, sonra açık her pencerede bir kez **Developer: Reload Window** yap. Yeniden yüklenmeyen pencere eklentiyi çalıştırmaz ve sekmeleri hatırlanmaz.
+
+macOS Terminal sekmelerinin de geri açılınca oturumlarıyla gelmesi için yukarıdaki "macOS Terminal tabs" parçasını `~/.zshrc` dosyasının sonuna ekle. Terminal'den ⌘Q ile çıkınca da sekmelerin geri gelmesini istiyorsan oradaki `defaults write` satırını bir kez çalıştır.
 
 Claude Code'un `language` ayarı Türkçe ise panel Türkçe konuşur, komut `/oturumlar` olur. Oturumları `--dangerously-skip-permissions` ile açmak istersen VS Code ayarlarında `claudeSessions.skipPermissions` seçeneğini aç; varsayılan kapalıdır.
 

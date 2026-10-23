@@ -1,6 +1,6 @@
 {
   "name": "sessions",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "A pane that lists every Claude Code session you started, grouped by folder, with names, pins, full-text and meaning search, and one-press resume in VS Code",
   "author": { "name": "kasparovabi" },
   "repository": "https://github.com/kasparovabi/claude-sessions",

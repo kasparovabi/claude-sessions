@@ -15,6 +15,8 @@ const NODE_CANDIDATES = ['node', '/opt/homebrew/bin/node', '/usr/local/bin/node'
 const ALIVE_CHECK =
   "for (const pid of process.argv.slice(1)) { try { process.kill(Number(pid), 0); console.log(pid) } catch (error) { if (/EPERM/.test(error.code)) console.log(pid) } }"
 const SESSION_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+const TERMINAL_TAB = /^[A-Za-z0-9:-]{1,80}$/
+const KEEPS_TAB = new Set(['clear', 'resume', 'other'])
 
 export const TEXT = {
   tr: {
@@ -145,6 +147,7 @@ let isIndexing = false
 let isTitling = false
 let vscodeCli = ''
 let osName: string | null = null
+let tab: { path: string; cwd: string; skip: boolean; record: string } | null = null
 const failedTitles = new Set<string>()
 const failedTranscripts = new Set<string>()
 
@@ -332,6 +335,26 @@ async function homeDir($: EngineInterface): Promise<string> {
   return (await $.env.get('HOME')) ?? (await $.env.get('USERPROFILE')) ?? ''
 }
 
+async function trackTerminalTab($: EngineInterface, cwd: string) {
+  const id = (await $.env.get('TERM_SESSION_ID')) ?? ''
+  if ((await $.env.get('TERM_PROGRAM')) !== 'Apple_Terminal' || !TERMINAL_TAB.test(id)) return
+  let skip = false
+  try {
+    skip = /\s--dangerously-skip-permissions(\s|$)/.test((await $.process.run(['/bin/sh', '-c', 'ps -o command= -p $PPID'])).stdout)
+  } catch {}
+  tab = { path: `${await homeDir($)}/.claude/oturumlar-sekmeler/${id}`, cwd, skip, record: '' }
+  await rememberTerminalTab($)
+}
+
+async function rememberTerminalTab($: EngineInterface) {
+  if (!tab) return
+  const id = await $.session.id()
+  const record = SESSION_ID.test(id) ? `${id}\n${tab.skip ? 1 : 0}\n${tab.cwd}\n` : ''
+  if (record === tab.record) return
+  await $.fs.write(tab.path, record)
+  tab.record = record
+}
+
 async function words($: EngineInterface): Promise<Text> {
   return TEXT[await read($, lang)]
 }
@@ -439,6 +462,7 @@ async function refreshLive($: EngineInterface) {
   const liveCount = TEXT[language].liveCount(rows.filter(row => row.live).length)
   $.ui.status(own ? `${own.title} · ${liveCount}` : liveCount)
   await applyOwnLabel($, self, labelMap)
+  await rememberTerminalTab($)
 }
 
 async function runIndexer($: EngineInterface): Promise<IndexedSession[]> {
@@ -704,11 +728,21 @@ export const register: Register = (on, options) => {
     await detectLang($)
     const text = await words($)
     await $.command.register({ name: text.command, description: text.commandDescription })
+    await quietly(trackTerminalTab($, e.cwd))
     await startUp($)
     $.clock.every(LIVE_MS, () => quietly(refreshLive($)))
     $.clock.every(INDEX_MS, () => quietly(refreshIndex($)))
     void $.ui.open({ id: PANE, title: text.paneTitle })
 
+    return next(e)
+  })
+
+  on('session.end', async ($, e, next) => {
+    if (tab && !KEEPS_TAB.has(e.reason)) {
+      const closed = tab
+      tab = null
+      await quietly($.fs.write(closed.path, ''))
+    }
     return next(e)
   })
 
